@@ -22,12 +22,43 @@ TOPIC_TRANSLATION_MAP = {
 # ── 2. LOAD PRE-CALCULATED DATA (ULTRA-LOW RAM) ─────────────────────────────
 @st.cache_data
 def load_data():
-    # Added the subfolder path here!
     df = pd.read_parquet("unseen_web_data/holdout_reviews.parquet")
+    
+    # 1. Force all column names to lowercase to prevent capitalization errors
+    df.columns = df.columns.str.lower()
+    
+    # 2. Get ahead of the DATE error
+    if 'date' not in df.columns:
+        # Check for common alternatives and rename them automatically
+        if 'review_date' in df.columns:
+            df.rename(columns={'review_date': 'date'}, inplace=True)
+        elif 'timestamp' in df.columns:
+            df.rename(columns={'timestamp': 'date'}, inplace=True)
+        else:
+            # If no date column exists, display a clear error on the website and stop gracefully
+            st.error(f"🚨 Missing Date Column! The columns in your file are actually named: {list(df.columns)}")
+            st.stop()
+            
     df['date'] = pd.to_datetime(df['date'])
     
+    # 3. Get ahead of the TOPIC_ID error
+    if 'topic_id' not in df.columns:
+        if 'topic' in df.columns:
+            df.rename(columns={'topic': 'topic_id'}, inplace=True)
+        else:
+            st.error(f"🚨 Missing Topic Column! The columns in your file are actually named: {list(df.columns)}")
+            st.stop()
+            
     if 'complaint_category' not in df.columns:
         df['complaint_category'] = df['topic_id'].map(TOPIC_TRANSLATION_MAP).fillna("Other Operational Issues")
+        
+    # 4. Get ahead of the PARK_NAME error
+    if 'park_name' not in df.columns:
+        if 'park' in df.columns:
+            df.rename(columns={'park': 'park_name'}, inplace=True)
+        elif 'location' in df.columns:
+            df.rename(columns={'location': 'park_name'}, inplace=True)
+            
     return df
     
 df = load_data()
