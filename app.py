@@ -1,53 +1,55 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from bertopic import BERTopic
-from bertopic.backend import BaseEmbedder
-from sentence_transformers import SentenceTransformer
+# ── 1. SIDEBAR & FILTERS (Same as before) ───────────────────────────────────
+# Ensure your date sliders and park multiselects are filtering down your raw dataframe
+raw_filtered_df = df[
+    (df['date'] >= selected_date_range[0]) & 
+    (df['date'] <= selected_date_range[1])
+].copy()
 
-st.title("🌲 NPS Live AI Transformer Dashboard")
+if 'park_name' in raw_filtered_df.columns:
+    raw_filtered_df = raw_filtered_df[raw_filtered_df['park_name'].isin(selected_parks)]
 
-# ── 1. LOAD THE LIGHTWEIGHT MODEL LIVE ──────────────────────────────────────
-@st.cache_resource
-def load_production_ai_model():
-    # Load the raw weights first
-    embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-    
-    # Pass the backbone directly inside the load function!
-    loaded_model = BERTopic.load("park_complaints_web_lightweight", embedding_model=embedding_model)
-    
-    return loaded_model
+# Limit to a safe batch size (e.g., max 200 records at once) so the free web server stays fast
+inference_batch = raw_filtered_df.head(200).copy()
 
-with st.spinner("🧠 Loading Multilingual Transformer Model into Web RAM..."):
-    topic_model = load_production_ai_model()
+# ── 2. DYNAMIC LARGE-SCALE INFERENCE ────────────────────────────────────────
+st.subheader(f"⚡ Live Transformer Batch Inference ({len(inference_batch)} Records)")
 
-# ── 2. THE LIVE INFERENCE INTERACTION ───────────────────────────────────────
-st.subheader("🔮 Run Live AI Inference on a New Review")
+if not inference_batch.empty:
+    with st.spinner("🔮 Model processing batch vectors in real-time..."):
+        # Run the raw text strings through the transformer ALL AT ONCE
+        live_topics, _ = topic_model.transform(inference_batch['text'].tolist())
+        
+        # Inject the live classifications back into our temporary view dataframe
+        inference_batch['live_topic_id'] = live_topics
+        
+        # Map IDs to your human-readable translation dictionary
+        TOPIC_TRANSLATION_MAP = {
+            -1: "General Feedback / Noise",
+            0: "Campground Noise & Disturbance",
+            1: "Trail Overgrowth & Hazards",
+            6: "Restroom Maintenance & Sanitation",
+            12: "Road Conditions & Potholes"
+        }
+        inference_batch['live_category'] = inference_batch['live_topic_id'].map(TOPIC_TRANSLATION_MAP).fillna("Other Operational Issues")
 
-user_review = st.text_input(
-    label="Type a custom complaint here to test the live model:",
-    value="The bathrooms near the main trail entrance were completely out of toilet paper and filthy."
-)
+    # ── 3. RENDER DYNAMIC LIVE GRAPH ────────────────────────────────────────
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("**Real-Time Model Classification Breakdown**")
+        live_counts = inference_batch['live_category'].value_counts().reset_index()
+        live_counts.columns = ['Category', 'Live Count']
+        
+        fig = px.bar(live_counts, x='Live Count', y='Category', orientation='h',
+                     color='Live Count', color_continuous_scale='Cividis')
+        fig.update_layout(yaxis={'categoryorder':'total ascending'}, margin=dict(l=20, r=20, t=20, b=20))
+        st.plotly_chart(fig, use_container_width=True)
+        
+    with col2:
+        st.markdown("**Performance Metrics**")
+        st.metric("Batch Inference Size", f"{len(inference_batch)} rows")
+        st.metric("Unique Clusters Found", f"{inference_batch['live_category'].nunique()}")
+        st.info("💡 Move the slider or change park filters! The model will recalculate embeddings for the new slice instantly.")
 
-if user_review:
-    # This line runs the text through the transformer live on your machine!
-    predicted_topics, probs = topic_model.transform([user_review])
-    resolved_id = predicted_topics[0]
-    
-    # Grab the top words associated with that predicted topic
-    topic_words = [word for word, _ in topic_model.get_topic(resolved_id)[:5]]
-    
-    # Translate to human-readable (Using the dictionary we set up before)
-    TOPIC_TRANSLATION_MAP = {
-        -1: "General Feedback / Noise",
-        0: "Campground Noise & Disturbance",
-        1: "Trail Overgrowth & Hazards",
-        6: "Restroom Maintenance & Sanitation",
-        12: "Road Conditions & Potholes"
-    }
-    
-    clean_label = TOPIC_TRANSLATION_MAP.get(resolved_id, f"Topic {resolved_id}")
-    
-    # Display the result
-    st.success(f"**AI Classification Result:** Component mapped to **{clean_label}**")
-    st.caption(f"🤖 *Top keywords matching this cluster:* {', '.join(topic_words)}")
+else:
+    st.warning("No raw data fits the selected slider range to run inference on.")
