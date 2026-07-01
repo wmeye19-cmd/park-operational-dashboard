@@ -10,11 +10,12 @@ st.title("🌲 NPS Live AI Transformer Dashboard")
 # ── 1. LOAD THE LIGHTWEIGHT MODEL LIVE ──────────────────────────────────────
 @st.cache_resource
 def load_production_ai_model():
-    loaded_model = BERTopic.load("park_complaints_web_lightweight")
+    # Load the raw weights first
     embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
     
-    # Wrap using BaseEmbedder instead
-    loaded_model.embedding_model = BaseEmbedder(embedding_model)
+    # Pass the backbone directly inside the load function!
+    loaded_model = BERTopic.load("park_complaints_web_lightweight", embedding_model=embedding_model)
+    
     return loaded_model
 
 with st.spinner("🧠 Loading Multilingual Transformer Model into Web RAM..."):
