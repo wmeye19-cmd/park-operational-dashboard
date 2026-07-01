@@ -2,18 +2,23 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from bertopic import BERTopic
+from bertopic.backend import SentenceTransformerBackend
 from sentence_transformers import SentenceTransformer
 
 st.title("🌲 NPS Live AI Transformer Dashboard")
 
 # ── 1. LOAD THE LIGHTWEIGHT MODEL LIVE ──────────────────────────────────────
-@st.cache_resource # cache_resource keeps the AI model loaded in memory permanently
+@st.cache_resource
 def load_production_ai_model():
-    # 1. Load the lightweight topic architecture you saved
+    # 1. Load your 1.7MB lightweight architecture
     loaded_model = BERTopic.load("park_complaints_web_lightweight")
     
-    # 2. Re-attach the language backbone so it can read new text
-    loaded_model.embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+    # 2. Load the raw transformer weights
+    embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+    
+    # 3. Wrap it so BERTopic can understand it
+    loaded_model.embedding_model = SentenceTransformerBackend(embedding_model)
+    
     return loaded_model
 
 with st.spinner("🧠 Loading Multilingual Transformer Model into Web RAM..."):
