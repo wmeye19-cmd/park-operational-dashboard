@@ -22,13 +22,15 @@ TOPIC_TRANSLATION_MAP = {
 # ── 2. LOAD PRE-CALCULATED DATA (ULTRA-LOW RAM) ─────────────────────────────
 @st.cache_data
 def load_data():
-    df = pd.read_csv("unseen_web_data/web_dashboard_data.csv")
+    # Read the Parquet file directly instead of a CSV
+    df = pd.read_parquet("holdout_reviews.parquet")
     df['date'] = pd.to_datetime(df['date'])
-    # If the column doesn't exist yet, map it dynamically from topic_id
+    
+    # Map the topic IDs to our human-readable categories dynamically
     if 'complaint_category' not in df.columns:
         df['complaint_category'] = df['topic_id'].map(TOPIC_TRANSLATION_MAP).fillna("Other Operational Issues")
     return df
-
+    
 df = load_data()
 
 # ── 3. SIDEBAR CONTROLS ──────────────────────────────────────────────────────
