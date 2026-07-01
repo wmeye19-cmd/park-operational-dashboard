@@ -22,11 +22,10 @@ TOPIC_TRANSLATION_MAP = {
 # ── 2. LOAD PRE-CALCULATED DATA (ULTRA-LOW RAM) ─────────────────────────────
 @st.cache_data
 def load_data():
-    # Read the Parquet file directly instead of a CSV
-    df = pd.read_parquet("holdout_reviews.parquet")
+    # Added the subfolder path here!
+    df = pd.read_parquet("unseen_web_data/holdout_reviews.parquet")
     df['date'] = pd.to_datetime(df['date'])
     
-    # Map the topic IDs to our human-readable categories dynamically
     if 'complaint_category' not in df.columns:
         df['complaint_category'] = df['topic_id'].map(TOPIC_TRANSLATION_MAP).fillna("Other Operational Issues")
     return df
@@ -92,7 +91,8 @@ user_review = st.text_input(
 @st.cache_resource
 def load_production_ai_model():
     embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-    loaded_model = BERTopic.load("park_complaints_web_lightweight", embedding_model=embedding_model)
+    # Added the subfolder path here as well!
+    loaded_model = BERTopic.load("unseen_web_data/park_complaints_web_lightweight", embedding_model=embedding_model)
     return loaded_model
 
 if user_review:
